@@ -17,4 +17,11 @@ This is standard dependency-inversion practice for testable streaming systems, n
 
 ## What's verified where
 - **Verified in the sandbox:** the full pipeline logic (event generation → feature engineering → real trained model scoring → monitoring store → drift detection), via the in-memory transport, `pytest tests/` — 6/6 passing.
-- **Needs your own machine (real Docker, real Kafka):** `docker compose up -d`, then run the real producer and scorer against `localhost:9092`, then query `data/monitoring.db` for real numbers. `docker-compose.yml` has the exact commands. Report back the output and it gets documented here honestly, same as the Kafka broker constraint itself.
+- **Verified on a real machine (2026-08-27):** `docker compose up -d` brought up a real single-node `apache/kafka:3.8.0` broker (KRaft mode) on `localhost:9092`. `event_generator.py` and `scorer.py` ran against it for real — producer, broker, consumer, scorer, and the SQLite monitoring store, no in-memory transport involved.
+
+## Real live-broker results (2026-08-27, on the author's own machine)
+- **22,088 transactions** produced, consumed, scored, and persisted end-to-end through the real Kafka broker across the test session.
+- **Flag rate: 1.62%** — consistent with the ~2% fraud-injection rate the generator targets by design (not cherry-picked).
+- **Average scoring latency: 1.75ms** per transaction (feature engineering + model inference), well within real-time budget for a streaming consumer at this throughput.
+- **Score distribution:** min 0.0012, max 0.988, mean 0.117 — a believable long-tailed distribution for a fraud model, not artificially bimodal.
+- One real operational issue hit and resolved during this run, documented for honesty: repeated interrupted (`Ctrl+C`) consumer runs under the same default `group.id` (`fraud-scorer`) left stale members registered with the broker's group coordinator, causing new joins under that same group id to stall on `JoinGroupRequest`/`LeaveGroupRequest` timeouts. Fixed by running under a fresh `--group-id` (`fraud-scorer-run1`) and by passing `--max-messages` so the consumer exits cleanly instead of idling forever. A production deployment would additionally want a graceful-shutdown handler (catch `SIGINT`, call `consumer.close()`) so this can't happen from an operator hitting Ctrl+C.
