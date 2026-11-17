@@ -1,5 +1,7 @@
 # FraudGuard-Agent
 
+![tests](https://github.com/likithreddy25/fraudguard-agent/actions/workflows/tests.yml/badge.svg)
+
 A real-time fraud-detection pipeline (Kafka + a trained ML model) operated by an autonomous LLM agent that watches the pipeline's live health/drift metrics and decides what to do about it — retrain, roll back, page a human, or correctly do nothing.
 
 This project exists to demonstrate three things together, honestly: real Kafka streaming, a real trained-and-evaluated ML pipeline, and a real agentic tool-use system — not three separate demos glued together, but one pipeline where each layer's output feeds the next.
@@ -28,6 +30,13 @@ event_generator.py --> [Kafka: transactions] --> scorer.py --> [Kafka: scored_tr
 | Autonomous agent (tools, scenarios, harness) | **Fully built**; harness plumbing verified with a non-LLM scripted stand-in. The real LLM-driven evaluation needs your own `ANTHROPIC_API_KEY` — see [docs/PHASE4.md](docs/PHASE4.md), including a second real bug found and fixed |
 
 Two real bugs were found and fixed during development (a SQLite disk-I/O issue and an audit-log-wiping issue) — both documented in the phase docs rather than quietly fixed and forgotten.
+
+## Explainability and fairness (added 2026-10)
+
+- `src/explain/reason_codes.py`: exact TreeSHAP values from XGBoost (`pred_contribs`), plain-language reason codes per flagged transaction, and global importance. Additivity (contributions + bias = raw score) is tested.
+- `src/fairness/audit.py`: disparate impact, equal-opportunity (TPR) gap, FPR gap, and a threshold-vs-fairness trade-off table, for a **synthetic** A/B group attribute that is a deliberate proxy for account age (never a model input).
+- `python -m src.fairness.run_audit` writes [docs/EXPLAIN_FAIRNESS_RESULTS.md](docs/EXPLAIN_FAIRNESS_RESULTS.md). Finding on this synthetic setup: the model never sees the group, yet flags group B 1.48x as often (FPR +0.7 pts) because account age leaks it. The TPR gap is small and noisy (72 frauds per group). See [docs/PHASE5.md](docs/PHASE5.md).
+- Built with Claude's assistance, like the rest of this repo; all numbers come from running the code on the synthetic dataset.
 
 ## Quickstart
 
